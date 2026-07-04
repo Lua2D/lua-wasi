@@ -118,8 +118,9 @@ The review keeps two homes honest:
 
 A claim above its evidence is **demoted**, **earned**, or **removed** (→ issue).
 When an open item is settled, it closes — leaving the grid — and its reality is
-written into the README. The doc pass ends by grading the open issues, then fixing
-the README's staleness.
+written into the README. The doc pass ends by grading what it advanced — the
+issues it touched and any it newly filed — then fixing the README's staleness; it
+does not re-grade issues it left untouched.
 
 ## Reaching `main`
 
