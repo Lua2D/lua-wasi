@@ -314,12 +314,12 @@ static void luaot_openlibs (lua_State *L) {
 #endif
 
 /* The witness debug build (-DLUA_LTESTS): vendored upstream ltests
-** (testes/ltests/) instruments the VM -- checked allocator, internal
+** (tests/ltests/) instruments the VM -- checked allocator, internal
 ** assertions, and the T library that unlocks the suite's C-API
 ** battery. ltests.c compiles as its own translation unit (it clashes
 ** with lstrlib.c's namespace inside one TU), so build with
-**   -DLUA_LTESTS '-DLUA_USER_H="ltests.h"' -Itestes/ltests -Isrc \
-**   src/onelua.c testes/ltests/ltests.c
+**   -DLUA_LTESTS '-DLUA_USER_H="ltests.h"' -Itests/ltests -Isrc \
+**   src/onelua.c tests/ltests/ltests.c
 ** Witness-only; never the shipped artifact.
 **
 ** ltests.h gates its own luaL_newstate/luaL_openlibs wrappers on
