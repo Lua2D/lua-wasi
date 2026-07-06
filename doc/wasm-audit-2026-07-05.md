@@ -63,10 +63,12 @@ load); and suite files `main.lua` (port mode), `gc.lua`, `db.lua`, `calls.lua`,
 
 - ~~**CI witness**~~ — **done**: `.github/workflows/witness.yml` re-witnesses
   the native ltests suite and the wasm suite on both engines (wasmtime, Node 24)
-  plus the reactor witness, on every push to main/work and every PR. Its first
-  run also supplied the missing Node 24 (V8 13.x, stable exnref) data point:
-  the full suite passes there — the detonation is confirmed confined to
+  on every push to main/work and every PR; the browser leg (suite-prefix bundle
+  in a real Chromium) and the reactor stress battery joined it in PR #20. The
+  first run also supplied the missing Node 24 (V8 13.x, stable exnref) data
+  point: the full suite passes there — the detonation is confirmed confined to
   pre-stable-exnref V8.
-- **Plain clang-20 witness** — the standardized-encoding build is witnessed via
-  `zig c++` (clang 20.1.2). Plain `clang++-20` uses the same flags and backend
-  and is expected identical, but has not been independently run here.
+- **Plain clang-20 witness** (issue #14) — the standardized-encoding build is
+  witnessed via `zig c++` (clang 20.1.2). Plain `clang++-20` uses the same
+  flags and backend and is expected identical, but has not been independently
+  run; the closing job is `deep-witness.yml` → `clang20-plain` (dispatch).

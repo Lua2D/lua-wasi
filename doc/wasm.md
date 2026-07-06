@@ -92,6 +92,12 @@ python3 ../scripts/wasmtime-run.py ../lua.wasm -e"_port=true" all.lua
 # → final OK !!!
 ```
 
+Two more witnesses ride the same artifacts, both CI-enforced: the browser leg
+(`node scripts/browser-witness.mjs lua.wasm tests/suite-prefix-bundle.lua` —
+regenerate the bundle first with `python3 scripts/suite-bundle.py`; needs
+playwright-core + a Chromium) and the reactor battery
+(`node scripts/reactor-stress.mjs lua-lib.wasm`).
+
 > **On old V8 (Node 22/23) the suite host-crashes.** The to-be-closed/coroutine
 > region of `locals.lua` SIGSEGVs the *host* process there — a V8 12.x-era
 > engine defect on both its EH paths, fixed in current V8 and absent on non-V8
