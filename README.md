@@ -24,9 +24,10 @@ lua-wasm is honest about maturity, so you can trust what it claims.
 
 - **Solid today (verified here):** the native interpreter runs the **full official Lua 5.4 test suite** under the ltests-instrumented build — checked allocator, internal assertions, the C-API battery — passing cleanly. The native `luaot` compiler builds and produces working AOT modules.
 - **Works, but witnessed by hand — not yet in CI:** the wasm interpreter, AOT-in-wasm, the embeddable reactor, and the differential check that AOT and interpreted runs produce identical output. These need clang-19 + wasi-libc + Node ≥ 24 and have been run on the maintainer's machine; **continuous CI to re-witness them on every change is a goal — tracked in the issues, not yet in place.**
+- **One known open crash under wasm:** an external bring-up audit (love-wasi, 2026-07-05, against pin `945f810`, Node 22 / V8) reports that the official suite's `locals.lua` — the to-be-closed (`<close>`) / coroutine region — segfaults the **host** process under the wasm build, tracing to V8's legacy wasm-EH path rather than to Lua. It is recorded, not yet reproduced under CI here. The same audit notes the artifact uses the **legacy** wasm-EH encoding, which non-browser runtimes (wasmtime) reject; moving to the standardized `try_table` encoding (LLVM 20+) would restore that breadth and is the leading candidate fix. Details in [`doc/wasm-audit-2026-07-05.md`](doc/wasm-audit-2026-07-05.md).
 - **Measured once, not continuously:** the performance numbers come from a specific run recorded in `RESULTS.md`, not an automated benchmark on every change.
 
-The native paths are solid; the wasm paths work but aren't yet under automated witness.
+The native paths are solid; the wasm paths work but aren't yet under automated witness — and carry one known open host-crash (above).
 
 ## Build and run
 
@@ -41,6 +42,8 @@ node scripts/wasm-run.mjs lua.wasm script.lua
 An AOT module lands in `package.preload` as `aot_<name>`, so `require("aot_<name>")` runs it at AOT speed.
 
 The native toolchain works as usual: `make guess` builds `src/lua`, `src/luac`, and the `src/luaot` compiler.
+
+[`doc/wasm.md`](doc/wasm.md) is the operational reference for the wasm build: the `WASM_EH` exception-handling runtime knob (internal shim vs. an external libc++abi for embedders needing typed catches), running the official test suite under wasm (`_port=true`), and the sharp edges.
 
 ## Embed
 

@@ -123,12 +123,34 @@ pc:
 # partial evaluations of lvm.c and are inherently their own translation
 # units; the build stays one compiler invocation, one artifact.
 
+# WASM_CLANGXX / WASM_SYSROOT are override points: point them at a custom
+# clang or a self-built wasi-libc sysroot on the make command line, e.g.
+#   make wasm WASM_CLANGXX=clang++ WASM_SYSROOT=/opt/wasi-sysroot
 WASM_CLANGXX= clang++-19
 WASM_SYSROOT= /usr
 WASM_STACK= 8388608
 WASM_O= lua.wasm
 WASM_AOT=
 WASM_AOT_DIR= wasm-aot
+
+# EH runtime. 'internal' (default) uses the self-contained catch(...)-only
+# micro-runtime in src/onelua.c -- no libc++abi required, but catch(...)
+# semantics only. 'external' suppresses it (-DLUAW_EXTERNAL_EH) so a real
+# libc++abi, built with -fwasm-exceptions, owns exception dispatch: required
+# by embedders whose host C++ needs *typed* catches, so Lua errors and host
+# exceptions share one EH domain. Supply the runtime's link inputs in
+# WASM_EH_LIBS and any extra -I/-L in WASM_EH_FLAGS, e.g.
+#   make wasm WASM_EH=external \
+#     WASM_EH_FLAGS="-L/path/to/rt/lib" \
+#     WASM_EH_LIBS="-lc++ -lc++abi /path/to/libunwind_wasm.a"
+WASM_EH= internal
+WASM_EH_FLAGS=
+WASM_EH_LIBS=
+ifeq ($(strip $(WASM_EH)),external)
+WASM_EH_DEFS= -DLUAW_EXTERNAL_EH
+else
+WASM_EH_DEFS=
+endif
 
 # -fno-strict-aliasing: at -O2, clang 19's wasm backend reorders the
 # GC-stop flag store in lgc.c's GCTM across the finalizer call under
@@ -140,6 +162,7 @@ WASM_FLAGS= --target=wasm32-wasi --sysroot=$(WASM_SYSROOT) -O2 -fno-strict-alias
 	  -Isrc/wasi -Isrc \
 	  -D_WASI_EMULATED_SIGNAL -D_WASI_EMULATED_PROCESS_CLOCKS \
 	  -DLUA_USE_JUMPTABLE=0 \
+	  $(WASM_EH_DEFS) $(WASM_EH_FLAGS) \
 	  -Wl,-z,stack-size=$(WASM_STACK) \
 	  -lwasi-emulated-signal -lwasi-emulated-process-clocks
 
@@ -165,7 +188,7 @@ wasm-lib: wasm
 
 wasm:
 ifeq ($(strip $(WASM_AOT)),)
-	$(WASM_CLANGXX) $(WASM_FLAGS) $(WASM_EXTRA) -o $(WASM_O) -x c++ src/onelua.c
+	$(WASM_CLANGXX) $(WASM_FLAGS) $(WASM_EXTRA) -o $(WASM_O) -x c++ src/onelua.c $(WASM_EH_LIBS)
 else
 	@test -x src/luaot || $(MAKE) -C src guess
 	rm -rf $(WASM_AOT_DIR) && mkdir -p $(WASM_AOT_DIR)
@@ -188,8 +211,21 @@ else
 	  echo '  lua_pop(L, 1);'; \
 	  echo '}'; } > $(WASM_AOT_DIR)/registry.c
 	$(WASM_CLANGXX) $(WASM_FLAGS) $(WASM_EXTRA) -DLUA_AOT -o $(WASM_O) \
-	  -x c++ src/onelua.c -x c $(WASM_AOT_DIR)/*.c
+	  -x c++ src/onelua.c -x c $(WASM_AOT_DIR)/*.c $(WASM_EH_LIBS)
 endif
+	@# External EH sanity gate (finding 4): -DLUAW_EXTERNAL_EH suppresses the
+	@# bundled shim, but linking a real libc++abi produces no duplicate-symbol
+	@# error if the archive is never pulled -- you silently fall back to nothing.
+	@# Fingerprint the artifact so the flag can't fail quietly. Internal mode
+	@# has no libc++abi by design, so the check only runs for WASM_EH=external.
+	@if [ "$(strip $(WASM_EH))" = external ]; then \
+	  if grep -aq "libc++abi" $(WASM_O); then \
+	    echo "external EH confirmed: libc++abi fingerprint present in $(WASM_O)"; \
+	  else \
+	    echo "FAIL: WASM_EH=external but the libc++abi fingerprint is missing in $(WASM_O) -- the external runtime was not linked in (micro-shim suppressed, nothing put in its place)" >&2; \
+	    exit 1; \
+	  fi; \
+	fi
 
 # list targets that do not create files (but not all makes understand .PHONY)
 .PHONY: all $(PLATS) clean test install uninstall local none dummy echo pc wasm
