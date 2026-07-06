@@ -6,8 +6,35 @@
 #
 # usage: scripts/differential.sh <lua.wasm> [node] [exclude-list]
 # exclude-list: comma-separated files forced to run interpreted in BOTH
-# legs (so they are still compared, just not through AOT) -- the
-# documented structural exclusions live here
+# legs (so they are still compared, just not through AOT). Defaults to
+# the documented structural exclusions:
+#
+#   literals -- literals.lua:226 asserts that identical long-string
+#   *literals* in one chunk share one address (string.format("%p")):
+#   the 5.4.8 parser's chunk-level constant-reuse optimization. luaot
+#   materializes each compiled function's constants independently, so
+#   the addresses differ. String *equality* is unaffected; the assert
+#   checks a memory optimization, not semantics -- and it holds ONLY on
+#   the parser path: stock Lua fails the same assert after its own
+#   string.dump/load round-trip (witnessed 2026-07-06), which is why
+#   upstream's all.lua itself routes literals.lua around its dump/undump
+#   dofile via olddofile (all.lua:168). This exclusion is the same
+#   maneuver for the same reason.
+#
+#   gc -- gc.lua:477 asserts total memory within 1 KB of a baseline
+#   after a full collect. Under AOT on current V8 (Node 24 / V8 13.6,
+#   Chromium 141 / V8 14.1) the assert trips: the pre-documented AOT
+#   divergence (see aot-suite.lua's header) where AOT'd code, under
+#   some caller stack layouts, roots a dead value one collection longer
+#   than the interpreter -- values and results unaffected, only the
+#   accounting instant. Engine-layout-dependent: the same AOT'd gc.lua
+#   passes on native, on wasmtime (gc-only AND all-32 artifacts, full
+#   leg, exit 0), and on Node 22/V8 12.4. Tracked for the luaot
+#   maintenance batch; excluded here so the witness measures semantics,
+#   not GC rooting instants.
+#
+#   Witnessed 2026-07-06: with only these exclusions, the full suite is
+#   byte-identical between legs (native build, 277 output lines).
 #
 # V8 runs baseline-only (--liftoff-only): its optimizing tier needs more
 # memory than small machines have when it decides to optimize the giant
@@ -17,8 +44,10 @@ set -e
 
 WASM=$1
 NODE=${2:-node}
-EXCLUDE=${3:-}
+EXCLUDE=${3:-literals,gc}
 [ -n "$WASM" ] || { echo "usage: $0 <lua.wasm> [node]" >&2; exit 2; }
+# the legs run with tests/ as cwd; a relative artifact path must survive that
+case "$WASM" in /*) ;; *) WASM=$(pwd)/$WASM ;; esac
 
 here=$(cd "$(dirname "$0")/.." && pwd)
 tmp=${TMPDIR:-/tmp}/lua-differential.$$
@@ -30,7 +59,7 @@ for mode in aot interp; do
     "$NODE" --liftoff-only --no-warnings ../scripts/wasm-run.mjs "$WASM" \
       ../scripts/aot-suite.lua $mode "$EXCLUDE" \
       > "$tmp/$mode.out" 2> "$tmp/$mode.err" ) \
-    || { echo "differential: $mode run FAILED"; tail -5 "$tmp/$mode.err"; exit 1; }
+    || { echo "differential: $mode run FAILED"; tail -20 "$tmp/$mode.err"; exit 1; }
 done
 
 # Normalizations, each with its reason. The first three differ between
