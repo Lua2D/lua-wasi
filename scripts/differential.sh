@@ -6,8 +6,17 @@
 #
 # usage: scripts/differential.sh <lua.wasm> [node] [exclude-list]
 # exclude-list: comma-separated files forced to run interpreted in BOTH
-# legs (so they are still compared, just not through AOT) -- the
-# documented structural exclusions live here
+# legs (so they are still compared, just not through AOT). Defaults to
+# the documented structural exclusions:
+#
+#   literals -- literals.lua:226 asserts that identical long-string
+#   *literals* in one chunk share one address (string.format("%p")):
+#   the 5.4.8 parser's chunk-level constant-reuse optimization. luaot
+#   materializes each compiled function's constants independently, so
+#   the addresses differ. String *equality* is unaffected; the assert
+#   checks a memory optimization, not semantics. Witnessed 2026-07-06:
+#   with only this exclusion, the full suite is byte-identical between
+#   legs (native build, 277 output lines).
 #
 # V8 runs baseline-only (--liftoff-only): its optimizing tier needs more
 # memory than small machines have when it decides to optimize the giant
@@ -17,7 +26,7 @@ set -e
 
 WASM=$1
 NODE=${2:-node}
-EXCLUDE=${3:-}
+EXCLUDE=${3:-literals}
 [ -n "$WASM" ] || { echo "usage: $0 <lua.wasm> [node]" >&2; exit 2; }
 # the legs run with tests/ as cwd; a relative artifact path must survive that
 case "$WASM" in /*) ;; *) WASM=$(pwd)/$WASM ;; esac
