@@ -99,6 +99,16 @@ jobs:
             examples/embed/build.sh | tee /tmp/embed.log
           grep -q 'EMBED WITNESS OK' /tmp/embed.log \
             || { echo "::error::embed example did not print EMBED WITNESS OK"; exit 1; }
+      - name: external-EH witness (typed catches with a real wasm-EH libc++abi)
+        # WASM_EH=external's runtime proof: the micro-shim suppressed, a real
+        # libc++abi built with -fwasm-exceptions from zig's bundled LLVM
+        # runtime sources, and a downstream catching its own TYPED exception
+        # while Lua errors travel the same runtime. See build-eh.sh.
+        run: |
+          set -o pipefail
+          examples/embed/build-eh.sh | tee /tmp/embed-eh.log
+          grep -q 'EXTERNAL-EH WITNESS OK' /tmp/embed-eh.log \
+            || { echo "::error::external-EH witness did not print EXTERNAL-EH WITNESS OK"; exit 1; }
 
   browser:
     runs-on: ubuntu-24.04

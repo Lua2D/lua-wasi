@@ -21,6 +21,8 @@ It proves the two guarantees the embed contract must hold:
 | `game.lua` | a stand-in downstream module, AOT-compiled into the artifact |
 | `embed.c` | the downstream — plain C, public API only, no `luaw_*` reactor glue |
 | `build.sh` | source-drop build under the flag contract, then runs the witness |
+| `embed-eh.cpp` | the **external-EH** witness — a C++ downstream catching its own *typed* exception, with Lua's shim suppressed |
+| `build-eh.sh` | builds a real wasm-EH libc++abi from zig's bundled LLVM sources, then the external-EH witness |
 
 ## Build & run
 
@@ -36,7 +38,11 @@ WASM_CXX="python3 -m ziglang c++" WASM_SYSROOT= \
 Expected last line: `EMBED WITNESS OK`. Running needs Node ≥ 24 (stable
 exnref); `RUN=…` overrides the runner, `RUN=:` builds only.
 
+The external-EH witness runs the same way (`./build-eh.sh`, same env knobs
+minus `WASM_CXX` — it is zig-only since the libc++abi sources come from the
+ziglang package). Expected last line: `EXTERNAL-EH WITNESS OK`.
+
 The full flag contract, the `liblua.a` convenience path, and the
 external-EH (typed-catch) mode are documented in
-[`doc/embedding.md`](../../doc/embedding.md). This example is the internal-EH,
-source-drop path; CI runs it as the `embed` job.
+[`doc/embedding.md`](../../doc/embedding.md). CI runs both witnesses as the
+`embed` job.

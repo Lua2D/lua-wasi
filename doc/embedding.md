@@ -81,6 +81,17 @@ So the mode depends on your own C++:
   linked (so the suppression can't fall back to nothing silently). See
   `doc/wasm.md`'s `WASM_EH` section for the link inputs.
 
+**Where to get a wasm-EH libc++abi:** no distro ships one — zig's own bundled
+libc++abi isn't built with wasm-EH either (linking it leaves `__cxa_throw` /
+`_Unwind_CallPersonality` undefined; witnessed 2026-07-06). The working recipe
+is [`examples/embed/build-eh.sh`](../examples/embed/build-eh.sh): compile the
+EH-relevant libc++abi translation units plus libunwind's `Unwind-wasm.c` from
+**zig's bundled LLVM runtime sources** with `-fwasm-exceptions` — ~17 small
+objects, seconds to build, producing `libcxxabi-eh.a`. Typed catch sites need
+`_Unwind_CallPersonality`/`__wasm_lpad_context`, which only this real runtime
+provides, so a program with typed catches **cannot** silently fall back to the
+shim — the link fails loudly (witnessed).
+
 ## AOT composition
 
 You can AOT-compile your own Lua modules into your artifact. AOT-generated code
@@ -108,8 +119,8 @@ The steps (worked end to end in `examples/embed/`):
   before landing.
 - **`liblua.a` convenience archive** — built by the Makefile target; the wasm
   archive is exercised by the same toolchain the CI `embed`/`wasm` jobs use.
-- **External-EH runtime with a downstream's own *typed* C++ exception** — the
-  knob and its symbol-level guard landed (#13); a runtime witness of a typed
-  catch surviving the link is still open on #11, pending a wasm-EH-built
-  libc++abi. Until then, external mode is *built* and fingerprint-gated, not yet
-  runtime-tested for typed semantics.
+- **External-EH runtime with a downstream's own *typed* C++ exception** —
+  CI-witnessed by the `embed` job's external-EH step (`embed-eh.cpp` +
+  `build-eh.sh`): typed catch with exception-object destructor run, and a Lua
+  `error()` caught through the same real libc++abi, in one artifact. First
+  witnessed 2026-07-06 under wasmtime; enforced under Node 24 in CI.
