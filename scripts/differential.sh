@@ -19,6 +19,8 @@ WASM=$1
 NODE=${2:-node}
 EXCLUDE=${3:-}
 [ -n "$WASM" ] || { echo "usage: $0 <lua.wasm> [node]" >&2; exit 2; }
+# the legs run with tests/ as cwd; a relative artifact path must survive that
+case "$WASM" in /*) ;; *) WASM=$(pwd)/$WASM ;; esac
 
 here=$(cd "$(dirname "$0")/.." && pwd)
 tmp=${TMPDIR:-/tmp}/lua-differential.$$
