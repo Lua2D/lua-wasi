@@ -23,11 +23,12 @@ And it aims to be a good citizen of a wasm host:
 lua-wasm is honest about maturity, so you can trust what it claims.
 
 - **Solid today (verified here):** the native interpreter runs the **full official Lua 5.4 test suite** under the ltests-instrumented build — checked allocator, internal assertions, the C-API battery — passing cleanly. The native `luaot` compiler builds and produces working AOT modules.
-- **Witnessed by script, not yet in CI:** the wasm interpreter passes the **full official suite** under wasmtime (`scripts/wasmtime-run.py`, `-e"_port=true" all.lua`, `final OK`) — the first non-V8 engine to run lua-wasm — and the suite-prefix witness passes in a real Chromium (V8 14.1). Both are re-runnable commands, run here against this pin; **continuous CI to re-witness them on every change is a goal — tracked in the issues, not yet in place.** AOT-in-wasm, the embeddable reactor, and the AOT/interpreter differential check remain witnessed by hand on the maintainer's machine.
+- **CI-enforced (re-witnessed on every change** by [`.github/workflows/witness.yml`](.github/workflows/witness.yml)**):** the native ltests-instrumented interpreter passes the official suite; the wasm interpreter passes the **full official suite on two engines** — wasmtime (the first non-V8 engine to run lua-wasm) and Node 24 (V8, stable exnref); the embeddable reactor passes its host-interface witness (`scripts/embed-demo.mjs`).
+- **Witnessed by script, not in CI:** the suite-prefix witness in a real Chromium (V8 14.1, via love-wasi's browser harness). AOT-in-wasm and the AOT/interpreter differential check remain witnessed by hand on the maintainer's machine.
 - **A host-crash on old V8, resolved by engine version:** an external bring-up audit (love-wasi, 2026-07-05, against pin `945f810`) found the suite's to-be-closed/coroutine region **segfaulting the host process** on Node 22. Cross-checking against wasmtime and Chromium 141 shows it to be a V8 12.x-era engine defect (both its EH paths), fixed in current V8: the same artifact and test pass clean there. The artifact was never at fault. Engines in that window (Node 22/23) remain exposed; the README's Node ≥ 24 floor stands. Full triage in [`doc/wasm-audit-2026-07-05.md`](doc/wasm-audit-2026-07-05.md).
 - **Measured once, not continuously:** the performance numbers come from a specific run recorded in `RESULTS.md`, not an automated benchmark on every change.
 
-The native paths are solid; the wasm paths now carry scripted witnesses on two engines, but aren't yet under automated CI.
+The native and wasm interpreter paths are under automated witness; the AOT-in-wasm paths are not yet.
 
 ## Build and run
 
