@@ -199,16 +199,20 @@ lua-debug:
 
 # The embeddable artifact: a wasm reactor (library, not command) whose
 # host interface is WASI plus the luaw_* exports defined in onelua.c.
-# Same WASM_AOT knob as the 'wasm' target.
+# Same WASM_AOT knob as the 'wasm' target. The mode flags live in
+# WASM_MODE (not WASM_EXTRA) so a command-line WASM_EXTRA -- which
+# overrides target-specific values -- cannot silently strip the
+# reactor's -DMAKE_LIB.
 WASM_LIB_O= lua-lib.wasm
+WASM_MODE=
 
-wasm-lib: WASM_EXTRA= -DMAKE_LIB -mexec-model=reactor -Wl,--export-dynamic
+wasm-lib: WASM_MODE= -DMAKE_LIB -mexec-model=reactor -Wl,--export-dynamic
 wasm-lib: WASM_O= $(WASM_LIB_O)
 wasm-lib: wasm
 
 wasm:
 ifeq ($(strip $(WASM_AOT)),)
-	$(WASM_CLANGXX) $(WASM_FLAGS) $(WASM_EXTRA) -o $(WASM_O) -x c++ src/onelua.c $(WASM_EH_LIBS)
+	$(WASM_CLANGXX) $(WASM_FLAGS) $(WASM_MODE) $(WASM_EXTRA) -o $(WASM_O) -x c++ src/onelua.c $(WASM_EH_LIBS)
 else
 	@test -x src/luaot || $(MAKE) -C src guess
 	rm -rf $(WASM_AOT_DIR) && mkdir -p $(WASM_AOT_DIR)
@@ -230,7 +234,7 @@ else
 	  done; \
 	  echo '  lua_pop(L, 1);'; \
 	  echo '}'; } > $(WASM_AOT_DIR)/registry.c
-	$(WASM_CLANGXX) $(WASM_FLAGS) $(WASM_EXTRA) -DLUA_AOT -o $(WASM_O) \
+	$(WASM_CLANGXX) $(WASM_FLAGS) $(WASM_MODE) $(WASM_EXTRA) -DLUA_AOT -o $(WASM_O) \
 	  -x c++ src/onelua.c -x c $(WASM_AOT_DIR)/*.c $(WASM_EH_LIBS)
 endif
 	@# External EH sanity gate (finding 4): -DLUAW_EXTERNAL_EH suppresses the
