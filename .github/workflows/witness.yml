@@ -80,3 +80,17 @@ jobs:
         run: >
           python3 scripts/suite-bundle.py
           && node scripts/browser-witness.mjs lua.wasm tests/suite-prefix-bundle.lua
+
+  provenance:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: vendored core is verbatim stock 5.4.8 (issue #7)
+        # lua.org egress exists on runners but not in every authoring
+        # sandbox -- this job is the witness's CI home. The sha256 echo
+        # feeds the script's pin (its FIXME) until a maintainer fills it.
+        run: |
+          curl -fsSL -o /tmp/lua.tar.gz https://www.lua.org/ftp/lua-5.4.8.tar.gz
+          echo "lua-5.4.8.tar.gz sha256 (for the LUA_SHA256 pin in verify-stock.sh):"
+          sha256sum /tmp/lua.tar.gz
+          bash scripts/verify-stock.sh
