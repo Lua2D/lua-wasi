@@ -79,6 +79,27 @@ jobs:
           && node scripts/embed-demo.mjs lua-lib.wasm
           && node scripts/reactor-stress.mjs lua-lib.wasm
 
+  embed:
+    # The second consumer shape (#11): a downstream that links Lua *into*
+    # its own wasm32-wasi artifact via the source-drop path, drives an
+    # AOT-compiled module, and catches a Lua error across the boundary.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: toolchain (zig c++ = clang 20.1.2)
+        run: python3 -m pip install 'ziglang==0.15.1'
+      - name: build the embed example (link Lua in) and run its witness
+        run: |
+          set -o pipefail
+          WASM_CXX="python3 -m ziglang c++" WASM_SYSROOT= \
+          WASM_EXTRA="-Xclang -target-feature -Xclang +exception-handling" \
+            examples/embed/build.sh | tee /tmp/embed.log
+          grep -q 'EMBED WITNESS OK' /tmp/embed.log \
+            || { echo "::error::embed example did not print EMBED WITNESS OK"; exit 1; }
+
   browser:
     runs-on: ubuntu-24.04
     steps:
