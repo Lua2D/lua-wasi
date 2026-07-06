@@ -14,9 +14,14 @@
 #   the 5.4.8 parser's chunk-level constant-reuse optimization. luaot
 #   materializes each compiled function's constants independently, so
 #   the addresses differ. String *equality* is unaffected; the assert
-#   checks a memory optimization, not semantics. Witnessed 2026-07-06:
-#   with only this exclusion, the full suite is byte-identical between
-#   legs (native build, 277 output lines).
+#   checks a memory optimization, not semantics -- and it holds ONLY on
+#   the parser path: stock Lua fails the same assert after its own
+#   string.dump/load round-trip (witnessed 2026-07-06), which is why
+#   upstream's all.lua itself routes literals.lua around its dump/undump
+#   dofile via olddofile (all.lua:168). This exclusion is the same
+#   maneuver for the same reason. Witnessed 2026-07-06: with only this
+#   exclusion, the full suite is byte-identical between legs (native
+#   build, 277 output lines).
 #
 # V8 runs baseline-only (--liftoff-only): its optimizing tier needs more
 # memory than small machines have when it decides to optimize the giant
