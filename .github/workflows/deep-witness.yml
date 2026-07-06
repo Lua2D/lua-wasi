@@ -16,9 +16,9 @@ on:
         options: [clang20-plain, aot-differential, benchmarks, all]
         default: clang20-plain
       aot_opt:
-        description: "opt level for AOT translation units (issue #15: try -O1 first)"
+        description: "opt level for AOT translation units (measured: -O1 barely helps; wasm backend dominates -- see issue #15)"
         type: string
-        default: "-O1"
+        default: "-O2"
 
 jobs:
   clang20-plain:
@@ -49,7 +49,7 @@ jobs:
   aot-differential:
     if: inputs.job == 'aot-differential' || inputs.job == 'all'
     runs-on: ubuntu-24.04
-    timeout-minutes: 120
+    timeout-minutes: 360
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -60,10 +60,12 @@ jobs:
           python-version: '3.12'
       - run: python3 -m pip install 'ziglang==0.15.1' wasmtime
       - name: the monster build -- every suite file AOT-compiled in
-        # ~1.22M lines of generated C (doc/wasm-audit issue #15); a later
-        # WASM_EXTRA -O flag overrides WASM_FLAGS' -O2, so aot_opt input
-        # downgrades only this build. If this still doesn't fit a standard
-        # runner, escalate runner class -- do not silently drop files.
+        # ~1.22M lines of generated C; measured ~15.5 min per 96k-line unit
+        # on the wasm target with -O1 ~= -O2 (the backend dominates, issue
+        # #15) -> sequential worst case ~3h, hence the 360min timeout. The
+        # real fix is parallel per-unit compiles (issue #15 scope); if a
+        # standard runner still doesn't fit, escalate runner class -- do
+        # not silently drop files.
         run: >
           make wasm WASM_O=lua-aot.wasm
           WASM_AOT="$(ls tests/*.lua | grep -v -e all.lua -e suite-prefix-bundle)"
