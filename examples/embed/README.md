@@ -35,7 +35,7 @@ WASM_CXX="python3 -m ziglang c++" WASM_SYSROOT= \
   WASM_EXTRA="-Xclang -target-feature -Xclang +exception-handling" ./build.sh
 ```
 
-Expected last line: `EMBED WITNESS OK`. Running needs Node ≥ 24 (stable
+Expected last line: `EMBED WITNESS OK`. Running needs Node ≥ 24.15 (default-on
 exnref); `RUN=…` overrides the runner, `RUN=:` builds only.
 
 The external-EH witness runs the same way (`./build-eh.sh`, same env knobs

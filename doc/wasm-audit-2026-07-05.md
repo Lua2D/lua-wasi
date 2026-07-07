@@ -72,3 +72,25 @@ load); and suite files `main.lua` (port mode), `gc.lua`, `db.lua`, `calls.lua`,
   `clang20-plain` ran green 2026-07-06 (llvm.org apt clang-20, Makefile
   defaults, full suite under wasmtime and Node 24). The zig recipe remains the
   documented fallback for hosts without a packaged clang 20.
+
+## Addendum 2026-07-06: the engine window, re-measured against Node releases
+
+A version sweep of Node against the real artifact (every probe below is the
+standardized-encoding `lua.wasm`, run locally with `scripts/wasm-run.mjs`)
+sharpens the floor the audit could only state as "Node ≥ 24":
+
+- **Node 24.0 through 24.14 refuse the artifact outright** — V8 13.6's node
+  builds keep exnref flag-gated, so `WebAssembly.compile` rejects `try_table`
+  (opcode 0x1f) unless `--experimental-wasm-exnref` is passed. With the flag,
+  the full suite and the all-32 differential pass (24.13 probed).
+- **Node 24.15.0 is the first 24.x that enables exnref by default**; 24.16 and
+  24.18 confirmed likewise. CI's green "Node 24" runs were riding the runner
+  cache serving 24.18.0 — the workflows now pin `>=24.15 <25`.
+- **Node 22 LTS current (22.22.2, V8 12.4.254.21-node.39) now *compiles* the
+  standardized encoding by default** (at audit time it needed the flag) — and
+  still **host-SIGSEGVs** at the suite's `locals.lua` to-be-closed-in-coroutines
+  region (exit 139, reproduced 2026-07-06). The compile gate moved; the V8 12.x
+  EH defect did not. The 22 line stays out.
+
+So the honest floor is **Node ≥ 24.15** (or any 24.x with
+`--experimental-wasm-exnref`), wasmtime, or a current browser.

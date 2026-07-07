@@ -13,13 +13,14 @@ make guess -j4                    # native interpreter (src/lua)
 # wasm interpreter and wasm AOT:
 make wasm WASM_O=lua.wasm
 make wasm WASM_O=lua-bench.wasm \
-  WASM_AOT="experiments/fib.lua experiments/nbody.lua experiments/mandelbrot.lua experiments/spectralnorm.lua experiments/fannkuch.lua"
+  WASM_AOT="experiments/fib.lua experiments/nbody.lua experiments/mandelbrot.lua experiments/spectralnorm.lua experiments/fannkuch.lua experiments/entitytables.lua experiments/stringbuild.lua experiments/closurechurn.lua"
 scripts/bench-all.sh              # runs the full matrix, best-of-3, -> experiments/results.csv
 ```
 
 Each cell is the best of three runs (CPU time via `os.clock`, GC settled
 first, benchmark output suppressed). CI re-runs this via
-`.github/workflows/deep-witness.yml` (`benchmarks` job, manual dispatch).
+`.github/workflows/deep-witness.yml` (`benchmarks` job — manual
+dispatch, and automatically on every release tag).
 Wasm runs use Node's WASI with V8's optimizing tier — the tier matters: under V8's baseline compiler
 (`--liftoff-only`) AOT'd wasm is *slower* than the interpreter, because
 the AOT payoff is C the wasm engine must itself optimize. Small hot
@@ -57,6 +58,23 @@ comparison (single run, quiet machine):
 | spectralnorm | 1000 | 1.688 | 0.927 | 4.838 | 2.295 |
 | fannkuch | 10 | 2.348 | 1.157 | 6.039 | 6.046 |
 
+## Game-shaped workloads (issue #10)
+
+The set above is tight numeric loops — AOT's best case by construction.
+Real game logic is table-access-, string- and GC-bound, so three
+workloads characterize those classes through the same harness:
+`entitytables` (ECS-ish component walk + spawn/despawn churn),
+`stringbuild` (`string.format` / concatenation / `table.concat`),
+`closurechurn` (short-lived closures + coroutine bodies). Same
+four-cell matrix, same `deep-witness.yml` `benchmarks` job (2026-07-06
+run 28821395909 and 2026-07-07 run 28832410071; both shown, patterns only):
+
+| benchmark | N | native interp | native AOT | wasm interp | wasm AOT |
+|---|---|--:|--:|--:|--:|
+| entitytables | 6000 | 1.858 / 1.834 | 1.309 / 1.286 | 3.350 / 3.252 | 3.270 / 3.198 |
+| stringbuild | 8000 | 2.008 / 2.014 | 1.829 / 1.848 | 3.040 / 3.140 | 3.149 / 3.191 |
+| closurechurn | 12000 | 1.812 / 1.800 | 1.572 / 1.570 | 2.624 / 2.599 | 2.168 / 2.162 |
+
 ## What the numbers say
 
 **AOT in wasm beats the interpreter in wasm — the thing this project is
@@ -70,6 +88,21 @@ for — and the encoding migration did not change that.** Speedup of
 | fib | 1.08×–1.27× |
 | nbody | 0.94×–1.23× |
 | fannkuch | 0.97×–1.06× |
+| closurechurn | 1.20×–1.21× |
+| entitytables | 1.02×–1.02× |
+| stringbuild | 0.97×–0.98× |
+
+**The game-shaped classes gain almost nothing, and that is the point of
+measuring them.** Entity-table walks, string building, and closure
+churn spend their time in `luaH_get`/`luaH_set`, the allocator, and the
+collector — costs AOT does not touch; removing bytecode dispatch leaves
+the bill nearly unchanged (stringbuild lands below parity in both runs:
+the generated C pays its code-size and call overhead without a loop to
+win back). Any headline speedup for lua-wasi's AOT therefore belongs to
+numeric loops *only*; code shaped like game logic should expect ~1×,
+and the `WASM_AOT` hot-list should be chosen with that in mind —
+compile in the numeric kernels, not the entity systems. Profiling
+*real* game code stays deferred to love-wasm (issue #10).
 
 The tight numeric loops (mandelbrot, spectralnorm) are where AOT earns
 its keep, same as before the migration: the C compiler constant-folds
