@@ -17,6 +17,11 @@ make wasm WASM_O=lua-bench.wasm \
 scripts/bench-all.sh              # runs the full matrix, best-of-3, -> experiments/results.csv
 ```
 
+The committed `experiments/results.csv` is the historical prior-toolchain
+snapshot (the five numeric benches); regenerating it on the current
+toolchain adds the three game-shaped benches (#10) that the speedup table
+below already reports.
+
 Each cell is the best of three runs (CPU time via `os.clock`, GC settled
 first, benchmark output suppressed). CI re-runs this via
 `.github/workflows/deep-witness.yml` (`benchmarks` job — manual

@@ -46,7 +46,7 @@
 #define LUAI_DDEC(dec)	static dec
 #define LUAI_DDEF	static
 #endif
-#endif /* !LUA_AOT */
+#endif /* !LUA_AOT && !LUA_LTESTS */
 
 /*
 ** ── WASI support ────────────────────────────────────────────────────
