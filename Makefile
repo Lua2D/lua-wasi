@@ -179,11 +179,17 @@ else
 WASM_EH_DEFS=
 endif
 
-# -fno-strict-aliasing: at -O2, clang 19's wasm backend reorders the
-# GC-stop flag store in lgc.c's GCTM across the finalizer call under
-# type-based aliasing analysis (witnessed by 5.4.8's gc reentrancy
-# test; correct at -O1/-Os and with this flag). The standard mitigation,
-# same as SQLite and the kernel ship with.
+# -fno-strict-aliasing: retained as cheap insurance against a witnessed
+# TBAA miscompile class (issue #4). At import time, a clang-19-era -O2
+# wasm build reordered the GC-stop flag store in lgc.c's GCTM across
+# the finalizer call (surfaced by 5.4.8's gc reentrancy test; correct
+# at -O1/-Os and with this flag). Probed 2026-07-06/07: the miscompile
+# does NOT reproduce on the current tree under clang 19.1.1 nor under
+# the pinned zig 0.15.1 (clang 20.1.2) -- the full suite passes without
+# the flag on both -- so the flag is not demonstrably load-bearing
+# today. It stays because the original failure was real and the cost is
+# negligible (SQLite and the kernel ship the same flag); re-probe when
+# the pinned toolchain moves.
 # Split into compile-only and link-only halves so the archive target
 # (liblua.a, below) can compile without the link inputs. WASM_FLAGS keeps
 # its original expansion for the wasm/wasm-lib targets -- CFLAGS then LDFLAGS,

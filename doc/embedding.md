@@ -106,6 +106,13 @@ The steps (worked end to end in `examples/embed/`):
 1. Build the host tool once: `make -C src guess` → `src/luaot`.
 2. AOT-compile each module: `src/luaot mymod.lua -o mymod.c -m aot_mymod`.
    The generated unit exports `int luaopen_aot_mymod(lua_State *L)`.
+   Pass `-c "@mymod.lua"` to pin the chunkname baked into the module —
+   without it, error messages and tracebacks from the AOT'd chunk cite
+   the *build-machine* input path (`@` + the path exactly as you passed
+   it), which leaks your layout and differs from what a runtime
+   `loadfile` of the same file would report. Pin it to whatever your
+   runtime load path would produce (the repo's own build pins `@` +
+   basename).
 3. Compile `mymod.c` (as C) alongside `onelua.c -DMAKE_LIB -DLUA_AOT` (as C++),
    or link it with `liblua.a` built `LUA_AOT=1`.
 4. Register each module under `package.preload` from your C, then `require` it —
