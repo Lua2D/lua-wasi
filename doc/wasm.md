@@ -28,8 +28,10 @@ make wasm WASM_CLANGXX="python3 -m ziglang c++" WASM_SYSROOT= \
 wasm EH feature that `-fwasm-exceptions` implies under plain clang.)
 
 Running the artifact needs a WASI host with wasm exception-handling support —
-Node ≥ 24, a current browser, or wasmtime via `scripts/wasmtime-run.py` (see
-the encoding section for which hosts take which encoding).
+Node ≥ 24.15, a current browser, or wasmtime via `scripts/wasmtime-run.py`
+(see the encoding section for which hosts take which encoding; Node 24.0–24.14
+compile the artifact only with `--experimental-wasm-exnref` — the sweep is in
+the audit's 2026-07-06 addendum).
 
 ## Exception-handling runtime: `WASM_EH`
 
@@ -109,16 +111,18 @@ every suite file AOT-compiled in, then diff the two legs' output
 (`scripts/differential.sh lua-aot.wasm` → expect `differential: AGREED`;
 its documented structural exclusions and their evidence live in that
 script's header). CI home: `deep-witness.yml` → `aot-differential`
-(manual dispatch — the build compiles ~1.2M lines of generated C,
-~80 min on a standard runner).
+(manual dispatch, and automatically on every release tag — the build
+compiles ~1.2M lines of generated C, ~80 min on a standard runner).
 
 > **On old V8 (Node 22/23) the suite host-crashes.** The to-be-closed/coroutine
 > region of `locals.lua` SIGSEGVs the *host* process there — a V8 12.x-era
 > engine defect on both its EH paths, fixed in current V8 and absent on non-V8
-> runtimes. The full triage, and the portable one-file repro
+> runtimes. Current Node 22 LTS (22.22.2) now *compiles* the standardized
+> encoding by default and still crashes the same way (re-witnessed 2026-07-06).
+> The full triage, and the portable one-file repro
 > (`scripts/suite-bundle.py`), are in
 > [`wasm-audit-2026-07-05.md`](wasm-audit-2026-07-05.md). It is why the Node
-> floor is 24, not 22.
+> floor is 24.15, not 22.
 
 ## EH encoding: `WASM_EH_ENCODING`
 
@@ -127,7 +131,7 @@ they accept. `WASM_EH_ENCODING` selects the one the artifact carries:
 
 | `WASM_EH_ENCODING` | instructions | build needs | runs on |
 | - | - | - | - |
-| `standard` (default) | `try_table`/`exnref` (the standardized format) | LLVM 20+ | V8 with stable exnref (Node ≥ 24, current browsers), wasmtime and other non-V8 runtimes |
+| `standard` (default) | `try_table`/`exnref` (the standardized format) | LLVM 20+ | V8 with default-on exnref (Node ≥ 24.15, current browsers; Node 24.0–24.14 need `--experimental-wasm-exnref`), wasmtime and other non-V8 runtimes |
 | `legacy` | `try`/`catch` (pre-standard) | clang 18/19 suffice | V8 engines only; wasmtime rejects it (`legacy_exceptions feature required`) |
 
 Witnessed on this pin (zig c++ / clang 20.1.2; engines: wasmtime 36,
@@ -135,7 +139,7 @@ Chromium 141 = V8 14.1, Node 22 = V8 12.4):
 
 - `standard`: full suite passes under wasmtime; suite-prefix witness passes in
   Chromium 141. On Node 22 (V8's *experimental* exnref, `--experimental-wasm-exnref`)
-  it still host-crashes — that V8 generation is broken on both paths; use Node ≥ 24.
+  it still host-crashes — that V8 generation is broken on both paths; use Node ≥ 24.15.
 - `legacy`: rejected by wasmtime; passes the suite-prefix witness on
   Chromium 141; host-crashes old V8 (the audit's original finding).
 
