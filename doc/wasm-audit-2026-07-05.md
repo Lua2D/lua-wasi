@@ -63,7 +63,7 @@ load); and suite files `main.lua` (port mode), `gc.lua`, `db.lua`, `calls.lua`,
 
 - ~~**CI witness**~~ — **done**: `.github/workflows/witness.yml` re-witnesses
   the native ltests suite and the wasm suite on both engines (wasmtime, Node 24)
-  on every push to main/work and every PR; the browser leg (suite-prefix bundle
+  on every push to main and every PR; the browser leg (suite-prefix bundle
   in a real Chromium) and the reactor stress battery joined it in PR #20. The
   first run also supplied the missing Node 24 (V8 13.x, stable exnref) data
   point: the full suite passes there — the detonation is confirmed confined to

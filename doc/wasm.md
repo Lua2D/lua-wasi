@@ -112,7 +112,9 @@ every suite file AOT-compiled in, then diff the two legs' output
 its one documented structural exclusion and its evidence live in that
 script's header). CI home: `deep-witness.yml` → `aot-differential`
 (manual dispatch, and automatically on every release tag — the build
-compiles ~1.2M lines of generated C, ~80 min on a standard runner).
+compiles ~1.2M lines of generated C, under an hour on a standard runner
+with the parallel per-unit compiles (#33), and minutes on a warm object
+cache).
 
 > **On old V8 (Node 22/23) the suite host-crashes.** The to-be-closed/coroutine
 > region of `locals.lua` SIGSEGVs the *host* process there — a V8 12.x-era
