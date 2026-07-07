@@ -10,6 +10,11 @@
 #   clang20-plain    -> issue #14 (plain clang-20 witness)
 #   aot-differential -> issue #15 (the monster AOT compile + differential)
 #   benchmarks       -> issue #16 (perf re-measurement, non-gating)
+#   sjlj-probe       -> issue #18 (the C-sjlj route, per LLVM minor);
+#                       dispatch-only and NOT part of 'all': it is
+#                       EXPECTED red while LLVM's lowering is broken,
+#                       so it must never gate a tag. Its run log is
+#                       the probe record.
 name: deep-witness
 on:
   push:
@@ -19,12 +24,16 @@ on:
       job:
         description: "which deep witness to run"
         type: choice
-        options: [clang20-plain, aot-differential, benchmarks, all]
+        options: [clang20-plain, aot-differential, benchmarks, sjlj-probe, all]
         default: clang20-plain
       aot_opt:
         description: "opt level for AOT translation units (measured: -O1 barely helps; wasm backend dominates -- see issue #15)"
         type: string
         default: "-O2"
+      llvm:
+        description: "LLVM major for sjlj-probe (apt.llvm.org suite + clang-N)"
+        type: string
+        default: "21"
 
 # On a tag push, `inputs` is empty: every job's `if` treats that event
 # as "all", and ${{ inputs.aot_opt }} expands to nothing (the Makefile's
@@ -71,20 +80,68 @@ jobs:
           echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-20 main" | sudo tee /etc/apt/sources.list.d/llvm20.list
           sudo apt-get update
           sudo apt-get install -y clang-20 lld-20 libclang-rt-20-dev-wasm32 wasi-libc
+      - name: toolchain fingerprint for the object-cache key
+        # A compiler upgrade must invalidate cached objects even when
+        # sources and flags are unchanged (the Makefile's flags stamp
+        # cannot see the compiler version).
+        id: cc
+        run: echo "v=$(clang++-20 --version | head -1 | tr ' ' '-')" >> "$GITHUB_OUTPUT"
+      - name: per-module object cache (issue #33)
+        # Caches wasm-aot/ (generated .c + compiled .o + flags stamp).
+        # Key: compiler version + the raw aot_opt input (empty on tag
+        # pushes -- deliberately a DISTINCT key from an explicit "-O2"
+        # dispatch, because the Makefile's flags stamp treats them as
+        # different flag sets and would wipe a shared cache's objects)
+        # + everything that determines the generated units.
+        uses: actions/cache@v4
+        with:
+          path: wasm-aot
+          key: aot-objs-${{ steps.cc.outputs.v }}-${{ inputs.aot_opt }}-${{ hashFiles('tests/*.lua', 'src/**', 'Makefile') }}
       - name: the monster build -- every suite file AOT-compiled in
         # ~1.22M lines of generated C; measured ~15.5 min per 96k-line unit
         # on the wasm target with -O1 ~= -O2 (the backend dominates) ->
-        # sequential worst case ~3h, hence the 360min timeout. The real
-        # fix is parallel per-unit compiles (issue #33); if a standard
-        # runner still doesn't fit, escalate runner class -- do not
-        # silently drop files. (tr: make's for-loop recipe needs a
-        # space-separated list, ls emits newlines.)
+        # ~3h sequential, under an hour with the Makefile's parallel
+        # per-unit compiles (issue #33; WASM_JOBS defaults to nproc),
+        # and minutes on a warm object cache. The 360min timeout stays
+        # as a cold-cache backstop; if a standard runner still doesn't
+        # fit, escalate runner class -- do not silently drop files.
+        # (tr: make's for-loop recipe needs a space-separated list, ls
+        # emits newlines.)
         run: >
           make wasm WASM_O=lua-aot.wasm
           WASM_AOT="$(ls tests/*.lua | grep -v -e all.lua -e suite-prefix-bundle | tr '\n' ' ')"
           WASM_EXTRA="${{ inputs.aot_opt }}"
       - name: the Agreed witness -- AOT vs interpreter, byte-identical output
-        run: scripts/differential.sh lua-aot.wasm node ""
+        # third argument omitted, not "": since #30, an explicit "" means
+        # "exclude nothing"; omission selects the documented default
+        # exclusion (literals).
+        run: scripts/differential.sh lua-aot.wasm node
+
+  sjlj-probe:
+    # Issue #18's per-LLVM-minor probe of the plain-C setjmp/longjmp
+    # route. Dispatch-only, excluded from 'all' and from tag pushes:
+    # a red run is the expected, informative outcome while the
+    # lowering is broken. timeout = the issue's two-hour timebox.
+    if: github.event_name == 'workflow_dispatch' && inputs.job == 'sjlj-probe'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '>=24.15 <25'  # 24.0-24.14 reject stable exnref (need --experimental-wasm-exnref); 24.15 turned it on
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: llvm.org clang-${{ inputs.llvm }} + wasm32 runtime, noble wasi-libc
+        run: |
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
+          echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-${{ inputs.llvm }} main" | sudo tee /etc/apt/sources.list.d/llvm.list
+          sudo apt-get update
+          sudo apt-get install -y clang-${{ inputs.llvm }} lld-${{ inputs.llvm }} libclang-rt-${{ inputs.llvm }}-dev-wasm32 wasi-libc
+      - run: python3 -m pip install wasmtime
+      - name: the probe (log is the record; red is an expected outcome)
+        run: scripts/sjlj-probe.sh clang-${{ inputs.llvm }} /usr
 
   benchmarks:
     if: github.event_name == 'push' || inputs.job == 'benchmarks' || inputs.job == 'all'

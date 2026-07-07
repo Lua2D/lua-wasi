@@ -137,6 +137,11 @@ WASM_STACK= 8388608
 WASM_O= lua.wasm
 WASM_AOT=
 WASM_AOT_DIR= wasm-aot
+# Parallelism for the per-module AOT compiles (issue #33): the generated
+# units are independent translation units, and the wasm backend takes
+# ~15 min on the largest of them -- the all-32 build is ~3 h sequential,
+# under an hour fanned out on a 4-core runner.
+WASM_JOBS= $(shell nproc 2>/dev/null || echo 2)
 
 # EH encoding on the wire. 'standard' (default) emits the standardized
 # try_table/exnref instructions -- needs LLVM 20+ to build, and runs on
@@ -174,11 +179,17 @@ else
 WASM_EH_DEFS=
 endif
 
-# -fno-strict-aliasing: at -O2, clang 19's wasm backend reorders the
-# GC-stop flag store in lgc.c's GCTM across the finalizer call under
-# type-based aliasing analysis (witnessed by 5.4.8's gc reentrancy
-# test; correct at -O1/-Os and with this flag). The standard mitigation,
-# same as SQLite and the kernel ship with.
+# -fno-strict-aliasing: retained as cheap insurance against a witnessed
+# TBAA miscompile class (issue #4). At import time, a clang-19-era -O2
+# wasm build reordered the GC-stop flag store in lgc.c's GCTM across
+# the finalizer call (surfaced by 5.4.8's gc reentrancy test; correct
+# at -O1/-Os and with this flag). Probed 2026-07-06/07: the miscompile
+# does NOT reproduce on the current tree under clang 19.1.1 nor under
+# the pinned zig 0.15.1 (clang 20.1.2) -- the full suite passes without
+# the flag on both -- so the flag is not demonstrably load-bearing
+# today. It stays because the original failure was real and the cost is
+# negligible (SQLite and the kernel ship the same flag); re-probe when
+# the pinned toolchain moves.
 # Split into compile-only and link-only halves so the archive target
 # (liblua.a, below) can compile without the link inputs. WASM_FLAGS keeps
 # its original expansion for the wasm/wasm-lib targets -- CFLAGS then LDFLAGS,
@@ -227,14 +238,45 @@ ifeq ($(strip $(WASM_AOT)),)
 	$(WASM_CLANGXX) $(WASM_FLAGS) $(WASM_MODE) $(WASM_EXTRA) -o $(WASM_O) -x c++ src/onelua.c $(WASM_EH_LIBS)
 else
 	@test -x src/luaot || $(MAKE) -C src guess
-	rm -rf $(WASM_AOT_DIR) && mkdir -p $(WASM_AOT_DIR)
+	@mkdir -p $(WASM_AOT_DIR)
+	@# $(WASM_AOT_DIR) persists across runs so per-module objects can be
+	@# reused (issue #33). Reuse is only sound under identical compile
+	@# flags: stamp them and wipe the directory's products when they
+	@# change. (A compiler-version change with unchanged flags is the CI
+	@# cache key's job -- see deep-witness.yml's aot-differential job.)
+	echo '$(WASM_CFLAGS) $(WASM_MODE) $(WASM_EXTRA) -DLUA_AOT' > $(WASM_AOT_DIR)/flags.new; \
+	cmp -s $(WASM_AOT_DIR)/flags.new $(WASM_AOT_DIR)/flags \
+	  || rm -f $(WASM_AOT_DIR)/*.c $(WASM_AOT_DIR)/*.o; \
+	mv $(WASM_AOT_DIR)/flags.new $(WASM_AOT_DIR)/flags
+	@# Regenerate every unit (luaot is cheap), but replace a unit's .c
+	@# only when its content changed, so the .o staleness check below is
+	@# by content, not by checkout timestamp.
 	set -e; \
 	names=""; \
 	for f in $(WASM_AOT); do \
 	  n=$$(basename $$f .lua | tr '.-' '__'); \
-	  ./src/luaot $$f -o $(WASM_AOT_DIR)/$$n.c -m aot_$$n; \
+	  ./src/luaot $$f -o $(WASM_AOT_DIR)/$$n.c.new -m aot_$$n -c "@$${f##*/}"; \
+	  if cmp -s $(WASM_AOT_DIR)/$$n.c.new $(WASM_AOT_DIR)/$$n.c; \
+	  then rm $(WASM_AOT_DIR)/$$n.c.new; \
+	  else mv $(WASM_AOT_DIR)/$$n.c.new $(WASM_AOT_DIR)/$$n.c; fi; \
 	  names="$$names $$n"; \
 	done; \
+	echo "$$names" > $(WASM_AOT_DIR)/names
+	@# The parallel fan-out (issue #33): each stale unit compiles to its
+	@# own object, -P$(WASM_JOBS) at a time; the .o.new dance keeps an
+	@# interrupted compile from leaving a fresh-looking truncated object.
+	@# xargs propagates any unit's failure as a nonzero exit.
+	set -e; \
+	stale=""; \
+	for n in $$(cat $(WASM_AOT_DIR)/names); do \
+	  if [ ! -f $(WASM_AOT_DIR)/$$n.o ] || [ $(WASM_AOT_DIR)/$$n.c -nt $(WASM_AOT_DIR)/$$n.o ]; \
+	  then stale="$$stale $$n"; fi; \
+	done; \
+	echo "aot: compiling $$(echo $$stale | wc -w) of $$(cat $(WASM_AOT_DIR)/names | wc -w) units (-P$(WASM_JOBS)), rest reused"; \
+	printf '%s\n' $$stale | xargs -r -P $(WASM_JOBS) -n 1 -I{} \
+	  sh -c 'echo "aot cc: {}"; $(WASM_CLANGXX) $(WASM_CFLAGS) $(WASM_MODE) $(WASM_EXTRA) -DLUA_AOT -c -x c $(WASM_AOT_DIR)/{}.c -o $(WASM_AOT_DIR)/{}.o.new && mv $(WASM_AOT_DIR)/{}.o.new $(WASM_AOT_DIR)/{}.o'
+	set -e; \
+	names=$$(cat $(WASM_AOT_DIR)/names); \
 	{ echo '#include "lua.h"'; \
 	  echo '#include "lauxlib.h"'; \
 	  for n in $$names; do echo "int luaopen_aot_$$n(lua_State *L);"; done; \
@@ -245,9 +287,11 @@ else
 	    echo "  lua_setfield(L, -2, \"aot_$$n\");"; \
 	  done; \
 	  echo '  lua_pop(L, 1);'; \
-	  echo '}'; } > $(WASM_AOT_DIR)/registry.c
+	  echo '}'; } > $(WASM_AOT_DIR)/registry.c; \
+	objs=""; \
+	for n in $$names; do objs="$$objs $(WASM_AOT_DIR)/$$n.o"; done; \
 	$(WASM_CLANGXX) $(WASM_FLAGS) $(WASM_MODE) $(WASM_EXTRA) -DLUA_AOT -o $(WASM_O) \
-	  -x c++ src/onelua.c -x c $(WASM_AOT_DIR)/*.c $(WASM_EH_LIBS)
+	  -x c++ src/onelua.c -x c $(WASM_AOT_DIR)/registry.c -x none $$objs $(WASM_EH_LIBS)
 endif
 	@# External EH sanity gate (finding 4): -DLUAW_EXTERNAL_EH suppresses the
 	@# bundled shim, but linking a real libc++abi produces no duplicate-symbol
