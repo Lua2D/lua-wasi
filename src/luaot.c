@@ -763,7 +763,12 @@ void luaot_PrintOpcodeComment(Proto *f, int pc)
             break;
         case OP_CLOSURE:
             print("%d %d",a,bx);
-            print(COMMENT "%p",VOID(f->p[bx]));
+            // luac.c prints the child Proto's ADDRESS here; that made
+            // the generated file differ between runs of the same input
+            // (ASLR), defeating content-keyed object caching (issue
+            // #33). The child's index carries the same information,
+            // deterministically.
+            print(COMMENT "proto %d",bx);
             break;
         case OP_VARARG:
             print("%d %d",a,c);

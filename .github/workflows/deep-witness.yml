@@ -71,14 +71,33 @@ jobs:
           echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-20 main" | sudo tee /etc/apt/sources.list.d/llvm20.list
           sudo apt-get update
           sudo apt-get install -y clang-20 lld-20 libclang-rt-20-dev-wasm32 wasi-libc
+      - name: toolchain fingerprint for the object-cache key
+        # A compiler upgrade must invalidate cached objects even when
+        # sources and flags are unchanged (the Makefile's flags stamp
+        # cannot see the compiler version).
+        id: cc
+        run: echo "v=$(clang++-20 --version | head -1 | tr ' ' '-')" >> "$GITHUB_OUTPUT"
+      - name: per-module object cache (issue #33)
+        # Caches wasm-aot/ (generated .c + compiled .o + flags stamp).
+        # Key: compiler version + the raw aot_opt input (empty on tag
+        # pushes -- deliberately a DISTINCT key from an explicit "-O2"
+        # dispatch, because the Makefile's flags stamp treats them as
+        # different flag sets and would wipe a shared cache's objects)
+        # + everything that determines the generated units.
+        uses: actions/cache@v4
+        with:
+          path: wasm-aot
+          key: aot-objs-${{ steps.cc.outputs.v }}-${{ inputs.aot_opt }}-${{ hashFiles('tests/*.lua', 'src/**', 'Makefile') }}
       - name: the monster build -- every suite file AOT-compiled in
         # ~1.22M lines of generated C; measured ~15.5 min per 96k-line unit
         # on the wasm target with -O1 ~= -O2 (the backend dominates) ->
-        # sequential worst case ~3h, hence the 360min timeout. The real
-        # fix is parallel per-unit compiles (issue #33); if a standard
-        # runner still doesn't fit, escalate runner class -- do not
-        # silently drop files. (tr: make's for-loop recipe needs a
-        # space-separated list, ls emits newlines.)
+        # ~3h sequential, under an hour with the Makefile's parallel
+        # per-unit compiles (issue #33; WASM_JOBS defaults to nproc),
+        # and minutes on a warm object cache. The 360min timeout stays
+        # as a cold-cache backstop; if a standard runner still doesn't
+        # fit, escalate runner class -- do not silently drop files.
+        # (tr: make's for-loop recipe needs a space-separated list, ls
+        # emits newlines.)
         run: >
           make wasm WASM_O=lua-aot.wasm
           WASM_AOT="$(ls tests/*.lua | grep -v -e all.lua -e suite-prefix-bundle | tr '\n' ' ')"
