@@ -232,7 +232,7 @@ else
 	names=""; \
 	for f in $(WASM_AOT); do \
 	  n=$$(basename $$f .lua | tr '.-' '__'); \
-	  ./src/luaot $$f -o $(WASM_AOT_DIR)/$$n.c -m aot_$$n; \
+	  ./src/luaot $$f -o $(WASM_AOT_DIR)/$$n.c -m aot_$$n -c "@$${f##*/}"; \
 	  names="$$names $$n"; \
 	done; \
 	{ echo '#include "lua.h"'; \

@@ -17,10 +17,12 @@
 #include "lauxlib.h"
 
 #include "ldebug.h"
+#include "lgc.h"
 #include "lobject.h"
 #include "lopcodes.h"
 #include "lopnames.h"
 #include "lstate.h"
+#include "lstring.h"
 #include "lundump.h"
 
 //
@@ -34,6 +36,7 @@ static const char *program_name    = "luaot";
 static char *input_filename  = NULL;
 static char *output_filename = NULL;
 static char *module_name     = NULL;
+static char *chunkname_override = NULL;
 
 static FILE * output_file = NULL;
 static int nfunctions = 0;
@@ -48,7 +51,12 @@ void usage()
           "Available options are:\n"
           "  -o name            output to file 'name'\n"
           "  -m name            generate code with `name` function as main function\n"
-          "  -e                 add a main symbol for executables\n",
+          "  -e                 add a main symbol for executables\n"
+          "  -c chunkname       bake 'chunkname' as the module's debug identity\n"
+          "                     (default: '@' + the input path as given, which\n"
+          "                     differs from what a runtime loadfile of the same\n"
+          "                     file would report unless the build runs from the\n"
+          "                     same directory -- see issue #31)\n",
           program_name);
 }
 
@@ -113,6 +121,10 @@ static void doargs(int argc, char **argv)
                 i++;
                 if (i >= argc) { fatal_error("missing argument for -o"); }
                 output_filename = argv[i];
+            } else if (0 == strcmp(arg, "-c")) {
+                i++;
+                if (i >= argc) { fatal_error("missing argument for -c"); }
+                chunkname_override = argv[i];
             } else {
                 fprintf(stderr, "unknown option %s\n", arg);
                 exit(1);
@@ -142,6 +154,23 @@ static void replace_dots(char *);
 static void print_functions();
 static void print_source_code(lua_State *L);
 
+// Rewrite the debug identity of the whole Proto tree (issue #31).
+// The generated module embeds a BYTECODE DUMP of the input, and the
+// dump serializes each Proto's source string -- so the chunkname the
+// runtime sees comes from here, not from the loadbuffer chunkname
+// argument (which only applies where the dump carries none). Setting
+// the top-level source is enough for the dump's compactness trick
+// (children sharing the parent's source dump NULL and inherit at
+// load), but children hold their own pointers, so walk them all.
+static void rebake_source(lua_State *L, Proto *p, TString *src)
+{
+    p->source = src;
+    luaC_objbarrier(L, p, src);
+    for (int i = 0; i < p->sizep; i++) {
+        rebake_source(L, p->p[i], src);
+    }
+}
+
 int main(int argc, char **argv)
 {
     // Process input arguments
@@ -163,6 +192,10 @@ int main(int argc, char **argv)
     Proto *proto = getproto(s2v(L->top.p-1));
     tmname = G(L)->tmname;
 
+    if (chunkname_override != NULL) {
+        rebake_source(L, proto, luaS_new(L, chunkname_override));
+    }
+
     // Generate the file
 
     output_file = fopen(output_filename, "w");
@@ -181,9 +214,17 @@ int main(int argc, char **argv)
     println("#define LUAOT_MODULE_NAME \"%s\"", module_name);
     println("#define LUAOT_LUAOPEN_NAME luaopen_%s", module_name);
     {
-        // The chunkname the module was compiled from (usually
-        // "@filename"), so the loaded chunk carries the same debug
-        // identity (source, short_src) as the original file.
+        // The chunkname baked into the module, so the loaded chunk
+        // carries a chosen debug identity (source, short_src). By
+        // default this is "@" + the input path AS PASSED ON THE
+        // COMMAND LINE -- a build-machine detail: an AOT'd chunk then
+        // reports a different short_src than a runtime loadfile of
+        // the same file (issue #31). -c rewrites the Proto tree's
+        // source above (rebake_source), which is what actually
+        // reaches the runtime -- the bytecode dump below serializes
+        // it; this #define only covers protos the dump leaves bare.
+        // (The Makefile pins -c "@" + basename so the AOT and
+        // loadfile identities agree in the suite's layout.)
         const char *chunkname = getstr(proto->source);
         print("#define LUAOT_MODULE_CHUNKNAME \"");
         for (const char *p = chunkname; *p != '\0'; p++) {
