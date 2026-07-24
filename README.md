@@ -55,6 +55,35 @@ Errors never unwind into the host, and no call blocks. [`scripts/embed-demo.mjs`
 
 That is one consumer shape — a host *wrapping* the finished module. The other is a **C/C++ project targeting wasm32-wasi that links Lua *in***, driving it through `lua.h` inside its own artifact (the shape love-wasm uses). [`doc/embedding.md`](doc/embedding.md) is the contract for it — the flag requirements, the source-drop and `make liblua.a` paths, and the internal-vs-external exception runtime. [`examples/embed/`](examples/embed/) is the worked, CI-run witness: a plain-C downstream that links Lua in, drives embedded Lua, and catches a Lua error across the boundary.
 
+## Contributing
+
+How work is planned, done, and reviewed here is the working agreement in [`AGENTS.md`](AGENTS.md) — vendored verbatim from [andy-emerson/working-agreement](https://github.com/andy-emerson/working-agreement) (CC BY 4.0; the version rides in its front matter, updated by replacing the file). Open work — todos, bugs, open decisions — lives in [GitHub Issues](https://github.com/andy-emerson/lua.wasm/issues); the design lives in [`doc/`](doc/) (`wasm.md`, `embedding.md`), with dated records under [`doc/history/`](doc/history/). The vendored Lua core is verbatim stock 5.4.8 except `luac.c`, enforced by [`scripts/verify-stock.sh`](scripts/verify-stock.sh) — read its header before touching `src/`.
+
+### Building
+
+```bash
+make guess       # native: src/lua, src/luac
+make lua-debug   # the ltests-instrumented witness build
+make wasm        # -> lua.wasm  (needs clang 20+ / zig c++; recipe in the Makefile header)
+```
+
+### Testing — the witnesses
+
+A change is done when the witnesses covering it are green, not when it compiles:
+
+```bash
+# deepest: full official suite on the ltests build
+# (C-API battery needs tests/libs built; stdin must be non-seekable)
+make -C tests/libs LUA_DIR=../../src
+cd tests && : | ../lua-debug all.lua                              # expect 'final OK !!!', zero 'testC not active'
+
+# the wasm artifact, both engines
+cd tests && node ../scripts/wasm-run.mjs ../lua.wasm -e"_port=true" all.lua
+cd tests && python3 ../scripts/wasmtime-run.py ../lua.wasm -e"_port=true" all.lua
+```
+
+CI runs these: [`witness.yml`](.github/workflows/witness.yml) on every PR and push to `main` (suite on native + two wasm engines + Chromium, the embed witnesses, provenance); [`deep-witness.yml`](.github/workflows/deep-witness.yml) on demand and on every release tag (plain clang-20). A red witness blocks the merge.
+
 ## Lineage
 
 Built on [PUC-Rio's Lua](https://www.lua.org). An earlier generation also carried [Hugo Musso Gualandi's lua-aot](https://github.com/hugomg/lua-aot-5.4), a research AOT compiler for Lua 5.4 — removed in v0.2.0 when its wasm speedup measured marginal across browser engines (a net loss on one), not enough to justify its size and dependency ([`doc/history/aot-sunset-2026-07-24.md`](doc/history/aot-sunset-2026-07-24.md)). lua.wasm carries that heritage toward a maintained, WebAssembly-targeting artifact — credited, not tracked: it defers to no living upstream and pins to no floating version.
