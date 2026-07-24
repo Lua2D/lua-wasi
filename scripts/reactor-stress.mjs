@@ -1,6 +1,6 @@
 // Harsher reactor witness: the failure modes love-wasi's pump will lean on.
 // Adopted from love-wasi (wasi/lua/witness/reactor-stress.mjs), the
-// bring-up that audited this repo -- see doc/wasm-audit-2026-07-05.md.
+// bring-up that audited this repo -- see doc/history/wasm-audit-2026-07-05.md.
 //   node scripts/reactor-stress.mjs lua-lib.wasm
 import { WASI } from 'node:wasi';
 import { readFile } from 'node:fs/promises';

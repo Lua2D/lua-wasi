@@ -1,7 +1,7 @@
 // Browser witness: run a Lua script inside lua.wasm in a real browser engine
 // -- Chromium (V8), Firefox (SpiderMonkey), or WebKit (JSC family) -- and
 // assert on the transcript. This is the browser leg of the engine matrix in
-// doc/wasm-audit-2026-07-05.md; the suite-prefix bundle (scripts/suite-bundle.py)
+// doc/history/wasm-audit-2026-07-05.md; the suite-prefix bundle (scripts/suite-bundle.py)
 // is the intended payload, since the audit's host-crash detonated only after
 // the whole prefix ran in order.
 //

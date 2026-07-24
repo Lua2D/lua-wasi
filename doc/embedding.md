@@ -72,24 +72,15 @@ So the mode depends on your own C++:
   dependency, `catch(...)`-only. `examples/embed/embed.c` is this mode.
 - **External (`WASM_EH=external` / `-DLUAW_EXTERNAL_EH`).** Your host C++ uses
   **typed** catches (`catch (MyError&)`) or exception-object destructors. The
-  bundled shim would give those silently wrong behavior, and linking your own
-  libc++abi on top of it would collide on a duplicate `__cxa_throw`. This mode
-  suppresses the shim so a real `-fwasm-exceptions` libc++abi owns dispatch, and
-  Lua's errors and your typed exceptions travel one EH domain. You supply the
-  libc++abi; a post-build fingerprint gate fails the build if it isn't actually
-  linked (so the suppression can't fall back to nothing silently). See
-  `doc/wasm.md`'s `WASM_EH` section for the link inputs.
+  bundled shim would give those silently wrong behavior, so this mode suppresses
+  it and a real `-fwasm-exceptions` libc++abi owns dispatch — Lua's errors and
+  your typed exceptions then travel one EH domain. `examples/embed/embed-eh.cpp`
+  is this mode.
 
-**Where to get a wasm-EH libc++abi:** no distro ships one — zig's own bundled
-libc++abi isn't built with wasm-EH either (linking it leaves `__cxa_throw` /
-`_Unwind_CallPersonality` undefined; witnessed 2026-07-06). The working recipe
-is [`examples/embed/build-eh.sh`](../examples/embed/build-eh.sh): compile the
-EH-relevant libc++abi translation units plus libunwind's `Unwind-wasm.c` from
-**zig's bundled LLVM runtime sources** with `-fwasm-exceptions` — ~17 small
-objects, seconds to build, producing `libcxxabi-eh.a`. Typed catch sites need
-`_Unwind_CallPersonality`/`__wasm_lpad_context`, which only this real runtime
-provides, so a program with typed catches **cannot** silently fall back to the
-shim — the link fails loudly (witnessed).
+The flags, the link inputs, the silent-fallback hazard, and the in-tree recipe
+for building a wasm-EH libc++abi (`examples/embed/build-eh.sh`, since no distro
+ships one — not even zig's bundled one) all live in [`doc/wasm.md`](wasm.md)'s
+`WASM_EH` section, the single source for the mechanics.
 
 ## Status
 
