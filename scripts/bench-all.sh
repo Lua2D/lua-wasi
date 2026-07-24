@@ -11,10 +11,13 @@
 set -e
 
 NODE=${NODE:-node}
-# Two workload classes, measured through one harness (issue #10):
-# numeric loops (AOT's best case) and game-shaped table/GC/string/closure
-# churn (the workload this project exists to serve).
-BENCHES="fib:34 nbody:1000000 mandelbrot:1500 spectralnorm:1000 fannkuch:10 entitytables:6000 stringbuild:8000 closurechurn:12000"
+# Three workload classes, measured through one harness (issue #10):
+# numeric loops (AOT's best case), game-shaped table/GC/string/closure
+# churn (the workload this project exists to serve), and data-plane /
+# edge-compute kernels (dataplane = columnar aggregate, a compute-in-engine
+# database stand-in; codec = FNV-1a + varint; dsp = FIR/box-blur) that model
+# what an embedder that does need speed would actually run.
+BENCHES="fib:34 nbody:1000000 mandelbrot:1500 spectralnorm:1000 fannkuch:10 entitytables:6000 stringbuild:8000 closurechurn:12000 dataplane:2000 codec:3000 dsp:2000"
 SRCS=""
 for spec in $BENCHES; do
   b=${spec%:*}
