@@ -14,7 +14,6 @@ INSTALL_TOP= /usr/local
 INSTALL_BIN= $(INSTALL_TOP)/bin
 INSTALL_INC= $(INSTALL_TOP)/include
 INSTALL_LIB= $(INSTALL_TOP)/lib
-INSTALL_MAN= $(INSTALL_TOP)/man/man1
 INSTALL_LMOD= $(INSTALL_TOP)/share/lua/$V
 INSTALL_CMOD= $(INSTALL_TOP)/lib/lua/$V
 
@@ -42,7 +41,6 @@ PLATS= aix bsd c89 freebsd generic guess linux linux-readline macosx mingw posix
 TO_BIN= lua luac
 TO_INC= lua.h luaconf.h lualib.h lauxlib.h lua.hpp
 TO_LIB= liblua.a
-TO_MAN= lua.1 luac.1
 
 # Lua version and release.
 V= 5.4
@@ -58,17 +56,15 @@ test:	dummy
 	src/lua -v
 
 install: dummy
-	cd src && $(MKDIR) $(INSTALL_BIN) $(INSTALL_INC) $(INSTALL_LIB) $(INSTALL_MAN) $(INSTALL_LMOD) $(INSTALL_CMOD)
+	cd src && $(MKDIR) $(INSTALL_BIN) $(INSTALL_INC) $(INSTALL_LIB) $(INSTALL_LMOD) $(INSTALL_CMOD)
 	cd src && $(INSTALL_EXEC) $(TO_BIN) $(INSTALL_BIN)
 	cd src && $(INSTALL_DATA) $(TO_INC) $(INSTALL_INC)
 	cd src && $(INSTALL_DATA) $(TO_LIB) $(INSTALL_LIB)
-	cd doc && $(INSTALL_DATA) $(TO_MAN) $(INSTALL_MAN)
 
 uninstall:
 	cd src && cd $(INSTALL_BIN) && $(RM) $(TO_BIN)
 	cd src && cd $(INSTALL_INC) && $(RM) $(TO_INC)
 	cd src && cd $(INSTALL_LIB) && $(RM) $(TO_LIB)
-	cd doc && cd $(INSTALL_MAN) && $(RM) $(TO_MAN)
 
 local:
 	$(MAKE) install INSTALL_TOP=../install
@@ -90,12 +86,10 @@ echo:
 	@echo "TO_BIN= $(TO_BIN)"
 	@echo "TO_INC= $(TO_INC)"
 	@echo "TO_LIB= $(TO_LIB)"
-	@echo "TO_MAN= $(TO_MAN)"
 	@echo "INSTALL_TOP= $(INSTALL_TOP)"
 	@echo "INSTALL_BIN= $(INSTALL_BIN)"
 	@echo "INSTALL_INC= $(INSTALL_INC)"
 	@echo "INSTALL_LIB= $(INSTALL_LIB)"
-	@echo "INSTALL_MAN= $(INSTALL_MAN)"
 	@echo "INSTALL_LMOD= $(INSTALL_LMOD)"
 	@echo "INSTALL_CMOD= $(INSTALL_CMOD)"
 	@echo "INSTALL_EXEC= $(INSTALL_EXEC)"
@@ -135,7 +129,7 @@ WASM_O= lua.wasm
 # runtimes (wasmtime). 'legacy' emits the pre-standard try/catch
 # encoding that clang 18/19 produce -- only V8 engines accept it, and
 # V8 12.x host-crashes on the suite's <close>-in-coroutines patterns
-# under it (doc/wasm-audit-2026-07-05.md, finding 1); kept only as a
+# under it (doc/history/wasm-audit-2026-07-05.md, finding 1); kept only as a
 # bridge for toolchains without clang 20.
 WASM_EH_ENCODING= standard
 ifeq ($(strip $(WASM_EH_ENCODING)),standard)

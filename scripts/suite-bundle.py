@@ -8,7 +8,7 @@
 # Why it exists: V8 12.x (Node 22) SIGSEGVs the HOST process at
 # locals.lua's to-be-closed-in-coroutines tests, but only after executing
 # the files before it -- the corruption is planted earlier and detonates
-# there (doc/wasm-audit-2026-07-05.md, finding 1). Reproducing that needs
+# there (doc/history/wasm-audit-2026-07-05.md, finding 1). Reproducing that needs
 # the whole prefix to run in order, and engines without a filesystem (a
 # browser tab; a V8 bug-report harness) can't loadfile. This bundle is the
 # portable detonation witness:

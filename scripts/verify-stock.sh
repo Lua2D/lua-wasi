@@ -3,12 +3,17 @@
 # 5.4.8 except for the one file we knowingly changed.
 #
 # The fork vendors PUC-Rio Lua 5.4.8 and modifies exactly one file:
-# luac.c (the assert-safe bytecode-listing rework described in UPDATING:
-# stock luac hoists GETARG_* into locals, which trips lua_assert on
-# opcodes lacking those argument formats under -DLUAI_ASSERT; found by
-# this witness's first CI run -- it was inherited from the lua-aot import,
-# undeclared). Until v0.2.0 there were five modified files: lobject.h,
-# lfunc.c, lvm.c, and luaconf.h carried AOT hooks, now removed with AOT.
+# luac.c (the assert-safe bytecode-listing rework: stock luac hoists
+# GETARG_* into locals, which trips lua_assert on opcodes lacking those
+# argument formats under -DLUAI_ASSERT; found by this witness's first CI
+# run -- it was inherited from the lua-aot import, undeclared). Until
+# v0.2.0 there were five modified files: lobject.h, lfunc.c, lvm.c, and
+# luaconf.h carried AOT hooks, now removed with AOT.
+#
+# Refreshing to a new Lua release: replace src/ with a clean copy, reapply
+# the luac.c change above, and extract upstream's testes/* into this repo's
+# tests/ (contents verbatim; only the directory name differs -- upstream
+# ships the suite in testes/). This script is the guardrail for step one.
 # This script diffs every source
 # file present in both the official release and src/:
 #   - a file outside the known-modified set that differs   -> FAIL

@@ -116,7 +116,7 @@ until their wasm-EH support is confirmed (#42).
 > encoding by default and still crashes the same way (re-witnessed 2026-07-06).
 > The full triage, and the portable one-file repro
 > (`scripts/suite-bundle.py`), are in
-> [`wasm-audit-2026-07-05.md`](wasm-audit-2026-07-05.md). It is why the Node
+> [`history/wasm-audit-2026-07-05.md`](history/wasm-audit-2026-07-05.md). It is why the Node
 > floor is 24.15, not 22.
 
 ## EH encoding: `WASM_EH_ENCODING`
